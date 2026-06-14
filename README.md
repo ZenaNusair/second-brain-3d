@@ -11,6 +11,26 @@ its implementation details.
 
 ---
 
+## Features
+
+- **Semantic graph** — notes are auto-linked by embedding similarity and grouped
+  into color-coded clusters; no manual linking.
+- **Hand control** — point to steer, hover to select, pinch to dive into a node —
+  all from your webcam, no mouse required.
+- **Pinch to explore** — zooming into a node blooms its detail bullets into a
+  constellation of subnodes, with tiny orange dots streaming along the connectors.
+- **Focus highlighting** — selecting a node lights up its connections and
+  neighbors while the rest of the graph dims away.
+- **Living visuals** — neon glow halos, particles flowing along the edges, a
+  drifting starfield, a cinematic vignette, proximity-revealed titles, and a slow
+  idle orbit.
+- **HUD** — live note / link / cluster counts, a color-coded cluster legend, and
+  an intro title sequence.
+- **Self-documenting** — the loaded notes describe this project, so the graph is a
+  diagram of its own architecture.
+
+---
+
 ## How it works
 
 ```
@@ -39,9 +59,12 @@ Two halves:
 `static/index.html` is the entire front-end — a few hundred lines, no build step,
 everything loaded from CDNs:
 
-- **[3d-force-graph](https://github.com/vasturiano/3d-force-graph)** (wraps Three.js) for the force-directed 3D layout.
-- **Three.js** (a second global build) for custom objects: glow halos, the wireframe selection box, text-sprite labels, the detail subnodes, and the starfield.
+- **[3d-force-graph](https://github.com/vasturiano/3d-force-graph)** (wraps Three.js) for the force-directed 3D layout and the directional particles flowing along edges.
+- **Three.js** (a second global build) for the custom objects: glow halos, the wireframe selection box, Orbitron text-sprite labels, the detail subnodes with their orange flow dots, and the starfield.
 - **[MediaPipe Hands](https://developers.google.com/mediapipe)** for webcam hand tracking.
+
+The rest — focus highlighting, proximity labels, the HUD, the intro, and the
+camera system (idle orbit + pinch-zoom focus) — is plain JS in that one file.
 
 `server.py` is a tiny Flask app that serves the page and exposes the graph at
 `/api/graph`.
@@ -142,11 +165,11 @@ A few knobs, all near the top of their sections:
 .
 ├── data/
 │   ├── notes.txt              # source notes (edit this)
-│   ├── notes.json             # parsed
-│   ├── notes_embedded.json    # parsed + embeddings
-│   ├── embeddings.npy         # embedding matrix
 │   ├── nodes.json             # graph nodes (label, details, cluster)
-│   └── edges.json             # graph edges (source, target, weight)
+│   ├── edges.json             # graph edges (source, target, weight)
+│   ├── notes.json             # generated · parsed notes        (gitignored)
+│   ├── notes_embedded.json    # generated · parsed + embeddings (gitignored)
+│   └── embeddings.npy         # generated · embedding matrix    (gitignored)
 ├── pipeline/
 │   ├── parse_notes.py
 │   ├── embed_notes.py
@@ -156,8 +179,12 @@ A few knobs, all near the top of their sections:
 ├── static/
 │   └── index.html             # the 3D viewer + hand tracking
 ├── requirements.txt
+├── .gitignore
 └── README.md
 ```
+
+`nodes.json` and `edges.json` are committed so the viewer runs straight after a
+clone; the other `data/*` files are regenerable intermediates and are gitignored.
 
 ---
 
