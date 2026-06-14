@@ -1,0 +1,258 @@
+[
+  {
+    "id": 0,
+    "label": "A three-stage pipeline turns raw notes into a graph",
+    "details": [
+      "parse_notes.py splits notes.txt on"
+    ],
+    "cluster": 5
+  },
+  {
+    "id": 1,
+    "label": "delimiters",
+    "details": [
+      "embed_notes.py encodes each note as a vector",
+      "build_graph.py clusters and links by similarity",
+      "run_pipeline.py runs all three steps in order"
+    ],
+    "cluster": 2
+  },
+  {
+    "id": 2,
+    "label": "Notes are written as plain text blocks",
+    "details": [
+      "the first line becomes the node label",
+      "dashed lines become the detail points",
+      "a blank"
+    ],
+    "cluster": 2
+  },
+  {
+    "id": 3,
+    "label": "separator divides each note",
+    "details": [
+      "no database, just one flat text file"
+    ],
+    "cluster": 2
+  },
+  {
+    "id": 4,
+    "label": "Sentence-transformers embeds each note",
+    "details": [
+      "all-MiniLM-L6-v2 produces 384-dim vectors",
+      "it runs locally with no API call",
+      "the title and details embed together",
+      "embeddings.npy caches the matrix"
+    ],
+    "cluster": 5
+  },
+  {
+    "id": 5,
+    "label": "Cosine similarity reveals hidden connections",
+    "details": [
+      "every note is compared to every other",
+      "the k nearest neighbors become edges",
+      "edge weight is the similarity score",
+      "semantically close notes link up"
+    ],
+    "cluster": 4
+  },
+  {
+    "id": 6,
+    "label": "K-means groups the notes into clusters",
+    "details": [
+      "six clusters partition the idea space",
+      "each cluster gets an accent color",
+      "cluster size hints at idea density",
+      "clustering is recomputed on every run"
+    ],
+    "cluster": 2
+  },
+  {
+    "id": 7,
+    "label": "A Flask server feeds the viewer",
+    "details": [
+      "server.py exposes /api/graph as JSON",
+      "nodes and links load from the data files",
+      "the static folder serves the single-page app",
+      "it runs on port 5001 to dodge macOS AirPlay"
+    ],
+    "cluster": 0
+  },
+  {
+    "id": 8,
+    "label": "The whole front-end is one HTML file",
+    "details": [
+      "3d-force-graph wraps Three.js for the layout",
+      "everything loads from a CDN with no build step",
+      "MediaPipe Hands reads the webcam input",
+      "a few hundred lines drive the entire scene"
+    ],
+    "cluster": 0
+  },
+  {
+    "id": 9,
+    "label": "Force-directed layout finds equilibrium",
+    "details": [
+      "repulsion pushes the nodes apart",
+      "edges pull related notes together",
+      "the simulation settles then freezes",
+      "a pinned hub anchors the center"
+    ],
+    "cluster": 3
+  },
+  {
+    "id": 10,
+    "label": "A central hub ties the tree together",
+    "details": [
+      "the Second Brain node sits at the origin",
+      "a spoke connects it to every note",
+      "it stays fixed while the notes drift",
+      "it gives the graph a readable center"
+    ],
+    "cluster": 1
+  },
+  {
+    "id": 11,
+    "label": "Nodes glow with additive sprites",
+    "details": [
+      "a radial gradient texture fakes bloom",
+      "each halo is tinted by its cluster color",
+      "additive blending lights up the dark scene",
+      "a slow pulse makes the glow breathe"
+    ],
+    "cluster": 1
+  },
+  {
+    "id": 12,
+    "label": "A starfield adds depth behind the graph",
+    "details": [
+      "1800 points fill a deep spherical shell",
+      "slow rotation creates parallax",
+      "a vignette darkens the screen edges",
+      "the background sells a sense of space"
+    ],
+    "cluster": 4
+  },
+  {
+    "id": 13,
+    "label": "Titles reveal by proximity",
+    "details": [
+      "only nearby notes show their label",
+      "distant labels stay hidden to cut clutter",
+      "the nearest band fades in as you approach",
+      "the hub label always stays visible"
+    ],
+    "cluster": 4
+  },
+  {
+    "id": 14,
+    "label": "Hand tracking replaces the mouse",
+    "details": [
+      "MediaPipe returns 21 landmarks per hand",
+      "it runs in the browser over WebGL",
+      "getUserMedia grabs the webcam directly",
+      "the index fingertip becomes the cursor"
+    ],
+    "cluster": 3
+  },
+  {
+    "id": 15,
+    "label": "Pointing steers the camera like a joystick",
+    "details": [
+      "fingertip position sets a rotation velocity",
+      "a dead-zone stops a steady point from drifting",
+      "left and right swing the view around",
+      "only an extended index finger engages it"
+    ],
+    "cluster": 3
+  },
+  {
+    "id": 16,
+    "label": "Hover-to-select feels more fluid than clicking",
+    "details": [
+      "the node nearest the fingertip highlights",
+      "a short dwell commits the selection",
+      "no pinch or click is required",
+      "the choice follows your hand continuously"
+    ],
+    "cluster": 3
+  },
+  {
+    "id": 17,
+    "label": "Pinch zooms into a node",
+    "details": [
+      "the camera flies in to frame the node",
+      "releasing eases back to the overview",
+      "moving while pinched orbits around it",
+      "the grabbed node stays selected throughout"
+    ],
+    "cluster": 1
+  },
+  {
+    "id": 18,
+    "label": "Details bloom into subnodes on pinch",
+    "details": [
+      "each bullet becomes a dot around the parent",
+      "golden-angle spacing spreads them evenly",
+      "connector lines tie them to the node",
+      "tiny orange dots stream along the lines"
+    ],
+    "cluster": 1
+  },
+  {
+    "id": 19,
+    "label": "Selecting a node lights up its neighbors",
+    "details": [
+      "connected edges brighten to white",
+      "the rest of the graph dims away",
+      "neighbor glows grow brighter",
+      "extra particles flow along the hot links"
+    ],
+    "cluster": 4
+  },
+  {
+    "id": 20,
+    "label": "The camera lives in spherical coordinates",
+    "details": [
+      "theta and phi set the orbit angle",
+      "the scene slowly spins when idle",
+      "a focus factor eases the zoom in and out",
+      "the home distance frames the whole tree"
+    ],
+    "cluster": 3
+  },
+  {
+    "id": 21,
+    "label": "Typography sets the tech mood",
+    "details": [
+      "Orbitron labels the hub and headers",
+      "Share Tech Mono carries the note text",
+      "labels render to canvas sprite textures",
+      "the fonts load before the scene draws"
+    ],
+    "cluster": 5
+  },
+  {
+    "id": 22,
+    "label": "Cross-version Three.js powers the custom objects",
+    "details": [
+      "the graph library bundles its own Three.js",
+      "a separate build exposes a global THREE",
+      "it draws the glow, lines, and text sprites",
+      "basic meshes render across the versions"
+    ],
+    "cluster": 5
+  },
+  {
+    "id": 23,
+    "label": "A HUD shows the graph at a glance",
+    "details": [
+      "live counts of notes, links, and clusters",
+      "a color-coded cluster legend",
+      "an intro title fades into the scene",
+      "it all shares the same tech typography"
+    ],
+    "cluster": 4
+  }
+]

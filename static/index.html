@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Second Brain — 3D Note Graph</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <style>
+    :root { --bg: #0a0a0f; --fg: #e8e8f0; --dim: #8a8a9a;
+      --mono: 'Share Tech Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --display: 'Orbitron', var(--mono); }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+      font-family: var(--mono); letter-spacing: 0.02em; overflow: hidden; }
+    #graph { position: fixed; inset: 0; }
+
+    /* details panel */
+    #panel { position: fixed; top: 16px; left: 16px; width: 320px; max-width: 40vw;
+      background: rgba(18,18,28,0.82); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px 20px;
+      transform: translateX(-380px); transition: transform .35s cubic-bezier(.2,.8,.2,1);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 5; }
+    #panel.open { transform: translateX(0); }
+    #panel h2 { margin: 0 0 10px; font-size: 16px; line-height: 1.35;
+      font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; }
+    #panel .cluster-tag { display: inline-block; font-size: 10px; letter-spacing: .18em;
+      font-family: var(--display); font-weight: 700;
+      text-transform: uppercase; padding: 3px 9px; border-radius: 999px; margin-bottom: 12px; }
+    #panel ul { margin: 0; padding-left: 18px; }
+    #panel li { font-size: 13.5px; color: var(--dim); line-height: 1.6; margin-bottom: 4px; }
+
+    /* webcam + hand cursor */
+    #cam-wrap { position: fixed; bottom: 16px; right: 16px; width: 220px; height: 165px;
+      border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);
+      z-index: 5; background: #000; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    #cam { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    #cam-status { position: absolute; top: 6px; left: 8px; font-size: 10px; letter-spacing: .12em;
+      text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,0.55); }
+
+    /* hover tooltip that follows a node */
+    #tip { position: fixed; transform: translate(-50%, -140%); pointer-events: none; z-index: 6;
+      opacity: 0; transition: opacity .15s; font-size: 12px; letter-spacing: .04em;
+      padding: 5px 10px; border-radius: 8px; background: rgba(10,10,16,0.9);
+      border: 1px solid rgba(255,255,255,0.15); white-space: nowrap;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+
+    /* legend / help */
+    #help { position: fixed; bottom: 16px; left: 16px; font-size: 11px; color: var(--dim);
+      background: rgba(18,18,28,0.7); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 10px; padding: 10px 14px; z-index: 5; line-height: 1.8; letter-spacing: .03em; }
+    #help b { color: var(--fg); font-family: var(--display); font-weight: 700; letter-spacing: .12em; }
+    .key { display:inline-block; padding:1px 6px; border:1px solid rgba(255,255,255,.18);
+      border-radius:5px; font-size:10px; }
+    #enable-cam { margin-top: 8px; cursor: pointer; color: #7db4ff; }
+
+    /* cinematic vignette over everything */
+    #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 4;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%); }
+
+    /* cluster legend + stats HUD (top-right) */
+    #hud { position: fixed; top: 16px; right: 16px; z-index: 5; text-align: right;
+      font-size: 11px; color: var(--dim); letter-spacing: .04em; user-select: none; }
+    #hud .stats { font-family: var(--display); font-weight: 700; letter-spacing: .14em;
+      font-size: 12px; color: var(--fg); margin-bottom: 10px; }
+    #hud .stats b { color: #7db4ff; }
+    #hud .legend { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+    #hud .row { display: flex; align-items: center; gap: 7px; opacity: .85; }
+    #hud .dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+
+    /* intro title */
+    #intro { position: fixed; inset: 0; z-index: 7; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; pointer-events: none;
+      animation: introFade 1.2s ease 3.4s forwards; }
+    #intro h1 { font-family: var(--display); font-weight: 900; letter-spacing: .42em;
+      font-size: clamp(28px, 7vw, 86px); margin: 0 0 0 .42em; color: #fff;
+      text-shadow: 0 0 24px rgba(120,160,255,.7), 0 0 60px rgba(120,160,255,.35);
+      animation: introIn 1.6s cubic-bezier(.2,.8,.2,1) both; }
+    #intro p { font-family: var(--mono); font-size: clamp(10px, 1.6vw, 14px);
+      letter-spacing: .35em; color: var(--dim); margin: 14px 0 0;
+      animation: introIn 1.6s cubic-bezier(.2,.8,.2,1) .25s both; }
+    @keyframes introIn { from { opacity: 0; filter: blur(14px); transform: translateY(12px); }
+      to { opacity: 1; filter: blur(0); transform: none; } }
+    @keyframes introFade { to { opacity: 0; visibility: hidden; } }
+  </style>
+</head>
+<body>
+  <div id="graph"></div>
+  <div id="vignette"></div>
+
+  <div id="intro">
+    <h1>SECOND BRAIN</h1>
+    <p>A LIVING MAP OF IDEAS</p>
+  </div>
+
+  <div id="hud">
+    <div class="stats" id="hud-stats"></div>
+    <div class="legend" id="hud-legend"></div>
+  </div>
+
+  <div id="panel">
+    <span class="cluster-tag" id="panel-cluster"></span>
+    <h2 id="panel-title"></h2>
+    <ul id="panel-details"></ul>
+  </div>
+
+  <div id="tip"></div>
+
+  <div id="cam-wrap">
+    <video id="cam" autoplay playsinline muted></video>
+    <span id="cam-status">camera off</span>
+  </div>
+
+  <div id="help">
+    <b>Second Brain</b> · titles reveal as you get close · scene orbits on its own<br/>
+    <span class="key">☝ point</span> steer ·
+    <span class="key">☝ hover a node</span> select it ·
+    <span class="key">🤏 pinch</span> zoom in · move to orbit · release to zoom out
+    <div id="enable-cam">▶ enable hand tracking</div>
+  </div>
+
+  <!-- Libraries (CDN, no build step) -->
+  <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/3d-force-graph@1.73.4/dist/3d-force-graph.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+
+  <script>
+  // ---- palette ----
+  const WHITE = '#ffffff', ORANGE = '#ff9e3d', NEON = '#39ff14';
+
+  // accent colour per cluster; clusters not listed stay plain white.
+  // (deterministic; edit this map to recolour the network.)
+  const CLUSTER_ACCENT = {
+    1: ORANGE,
+    2: NEON,
+    3: '#00e5ff',   // cyan
+    4: '#ff3df0',   // magenta
+  };
+  function specialColor(n) {
+    return CLUSTER_ACCENT[n.cluster] || null;
+  }
+
+  // ---- build the 3D graph ----
+  let Graph;
+  let baseRadius = 320;              // fixed camera distance in the overview
+  let selectedId = null;
+  let selectionBox = null;           // white wireframe cube around the selected node
+  let subGroup = null, subForId = null;   // detail subnodes shown around the pinched node
+
+  // split a title into (at most) two balanced lines at a word boundary
+  function wrapTwo(text) {
+    const words = text.split(' ');
+    if (words.length < 2) return [text];
+    let acc = 0, best = 1, bestDiff = Infinity;
+    for (let i = 0; i < words.length - 1; i++) {
+      acc += words[i].length + 1;
+      const diff = Math.abs(acc - text.length / 2);
+      if (diff < bestDiff) { bestDiff = diff; best = i + 1; }
+    }
+    return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+  }
+
+  // a two-line label rendered as a sprite floating above a node.
+  // opts: { family, weight, tracking, upper }
+  function makeTextSprite(text, color, scale, opts) {
+    opts = opts || {};
+    const family = opts.family || "'Share Tech Mono', monospace";
+    const weight = opts.weight || 400;
+    const tracking = opts.tracking || 0;     // letter-spacing in px
+    const lines = wrapTwo(opts.upper ? text.toUpperCase() : text);
+    const pad = 24, font = 44, lh = font * 1.28;
+    const cv = document.createElement('canvas');
+    const ctx = cv.getContext('2d');
+    const fontStr = `${weight} ${font}px ${family}`;
+    const applyStyle = () => {
+      ctx.font = fontStr;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = tracking + 'px';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+    };
+    applyStyle();
+    const textW = Math.max(...lines.map(l => ctx.measureText(l).width)) + Math.abs(tracking) * 2;
+    cv.width = textW + pad * 2;
+    cv.height = lh * lines.length + pad * 2;
+    applyStyle();   // canvas resize clears state
+    ctx.fillStyle = color;
+    ctx.shadowColor = color === WHITE ? 'rgba(0,0,0,0.95)' : color;
+    ctx.shadowBlur = color === WHITE ? 6 : 14;   // neon glow for coloured labels
+    lines.forEach((l, i) => ctx.fillText(l, cv.width / 2, pad + lh * (i + 0.5)));
+    const tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    const s = (scale || 1);
+    sprite.scale.set((cv.width / cv.height) * 8 * s, 8 * s, 1);
+    sprite.position.set(0, 7 * s, 0);   // float above the dot
+    return sprite;
+  }
+
+  // fonts for the in-scene labels: techy display for the hub, mono for notes
+  const FONT_DISPLAY = "'Orbitron', monospace";
+  const FONT_MONO = "'Share Tech Mono', monospace";
+
+  // soft radial sprite used as an additive glow halo behind each node
+  function glowTexture() {
+    const s = 128, cv = document.createElement('canvas');
+    cv.width = cv.height = s;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    g.addColorStop(0.0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.2, 'rgba(255,255,255,0.55)');
+    g.addColorStop(1.0, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, s, s);
+    return new THREE.CanvasTexture(cv);
+  }
+  let GLOW_TEX = null;
+
+  // a node = default dot (kept) + additive glow halo + label sprite
+  function makeNodeObject(node) {
+    if (!GLOW_TEX) GLOW_TEX = glowTexture();
+    const group = new THREE.Group();
+    const accent = node.center ? '#bcd2ff' : (specialColor(node) || WHITE);
+
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: GLOW_TEX, color: accent, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, opacity: node.center ? 0.95 : 0.5,
+    }));
+    const gs = node.center ? 40 : 11;
+    glow.scale.set(gs, gs, 1);
+    node.__glow = glow;
+    node.__glowBase = glow.material.opacity;
+    group.add(glow);
+
+    const label = node.center
+      ? makeTextSprite('SECOND BRAIN', WHITE, 1.35, { family: FONT_DISPLAY, weight: 900, tracking: 4, upper: true })
+      : makeTextSprite(node.label, specialColor(node) || WHITE, 0.72, { family: FONT_DISPLAY, weight: 700, tracking: 1 });
+    node.__label = label;
+    label.visible = !!node.center;     // notes' labels reveal by proximity in controlLoop
+    group.add(label);
+    return group;
+  }
+
+  // ---- focus emphasis: light up the selected node's links + neighbours ----
+  let hotSet = new Set();              // ids of selected node + its neighbours
+  const linkEndId = e => (e && e.id !== undefined ? e.id : e);
+  function linkHot(l) {
+    if (selectedId === null) return false;
+    return linkEndId(l.source) === selectedId || linkEndId(l.target) === selectedId;
+  }
+  function computeHot(id) {
+    const s = new Set();
+    if (id !== null && Graph) {
+      s.add(id);
+      for (const l of Graph.graphData().links) {
+        const a = linkEndId(l.source), b = linkEndId(l.target);
+        if (a === id) s.add(b);
+        if (b === id) s.add(a);
+      }
+    }
+    hotSet = s;
+  }
+  function refreshHighlight() {
+    if (!Graph) return;
+    // re-applying the same accessors forces 3d-force-graph to restyle links
+    Graph.linkColor(Graph.linkColor())
+         .linkWidth(Graph.linkWidth())
+         .linkDirectionalParticles(Graph.linkDirectionalParticles())
+         .linkDirectionalParticleWidth(Graph.linkDirectionalParticleWidth());
+  }
+
+  // per-link colour (rgba carries the per-link opacity); dims non-focused links
+  function linkRGBA(l) {
+    if (selectedId === null) return l.spoke ? 'rgba(150,175,230,0.10)' : 'rgba(200,215,255,0.34)';
+    if (linkHot(l)) return 'rgba(210,228,255,0.95)';
+    return l.spoke ? 'rgba(150,175,230,0.02)' : 'rgba(140,160,210,0.05)';
+  }
+
+  // ---- distant starfield for depth + parallax ----
+  let starfield = null;
+  function addStarfield() {
+    const N = 1800;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++) {
+      const r = 700 + Math.random() * 1800;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+      pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
+      pos[i * 3 + 1] = r * Math.cos(ph);
+      pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    starfield = new THREE.Points(geo, new THREE.PointsMaterial({
+      color: 0x8aa2cc, size: 2, sizeAttenuation: true,
+      transparent: true, opacity: 0.7, depthWrite: false,
+    }));
+    Graph.scene().add(starfield);
+  }
+
+  // ---- HUD: live stats + cluster legend ----
+  function buildHud(nodes) {
+    const notes = nodes.filter(n => !n.center);
+    const counts = {};
+    for (const n of notes) counts[n.cluster] = (counts[n.cluster] || 0) + 1;
+    const links = Graph.graphData().links.filter(l => !l.spoke).length;
+    document.getElementById('hud-stats').innerHTML =
+      `<b>${notes.length}</b> NOTES · <b>${links}</b> LINKS · <b>${Object.keys(counts).length}</b> CLUSTERS`;
+    const legend = document.getElementById('hud-legend');
+    legend.innerHTML = '';
+    Object.keys(counts).map(Number).sort((a, b) => a - b).forEach(c => {
+      const col = CLUSTER_ACCENT[c] || '#cfd6e6';
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<span>cluster ${c} · ${counts[c]}</span>` +
+        `<span class="dot" style="color:${col};background:${col}"></span>`;
+      legend.appendChild(row);
+    });
+  }
+
+  // wait for the web fonts so the canvas labels render in them (not a fallback)
+  const fontsReady = (document.fonts && document.fonts.load)
+    ? Promise.all([
+        document.fonts.load('500 44px "Orbitron"'),
+        document.fonts.load('700 44px "Orbitron"'),
+        document.fonts.load('900 44px "Orbitron"'),
+        document.fonts.load('400 44px "Share Tech Mono"'),
+      ]).catch(() => {})
+    : Promise.resolve();
+
+  Promise.all([fetch('/api/graph').then(r => r.json()), fontsReady]).then(([data]) => {
+    // add a central "Second Brain" hub that every note connects to
+    const center = { id: 'brain', label: 'Second Brain', center: true, fx: 0, fy: 0, fz: 0 };
+    const spokes = data.nodes.map(n => ({ source: 'brain', target: n.id, spoke: true }));
+    data.nodes.push(center);
+    data.links = data.links.concat(spokes);
+
+    Graph = ForceGraph3D()(document.getElementById('graph'))
+      .backgroundColor('#05050a')
+      .graphData(data)
+      .nodeId('id')
+      .nodeRelSize(1.3)                                   // tiny dots
+      .nodeColor(() => WHITE)                             // white dots
+      .nodeOpacity(1)
+      .nodeResolution(12)
+      .nodeThreeObjectExtend(true)                        // keep the default sphere, add glow + label
+      .nodeThreeObject(makeNodeObject)
+      .linkColor(linkRGBA)
+      .linkOpacity(1)                                     // per-link alpha lives in linkRGBA
+      .linkWidth(l => linkHot(l) ? 0.28 : (l.spoke ? 0.08 : 0.22))
+      .linkDirectionalParticles(l => l.spoke ? 0 : (linkHot(l) ? 4 : 2))
+      .linkDirectionalParticleWidth(l => linkHot(l) ? 1.2 : 0.45)
+      .linkDirectionalParticleSpeed(0.006)
+      .linkDirectionalParticleColor(l => linkHot(l) ? 'rgba(255,255,255,0.95)' : 'rgba(120,150,255,0.55)')
+      .onNodeClick(selectNode)
+      .onNodeHover(showHover);
+
+    Graph.d3Force('charge').strength(-130);
+    Graph.nodeVal(n => n.center ? 3 : 1);
+
+    addStarfield();
+    buildHud(data.nodes);
+
+    Graph.onEngineStop(() => {
+      // home distance = frame the whole tree from the origin (the hub), so the
+      // overview is a consistent point we return to no matter which node we
+      // pinch — near or deep. (We can't read it from the camera: the control
+      // loop overrides the camera every frame, clobbering the auto-fit.)
+      let maxD = 0;
+      for (const n of Graph.graphData().nodes) {
+        if (n.x !== undefined) maxD = Math.max(maxD, Math.hypot(n.x, n.y, n.z));
+      }
+      baseRadius = Math.max(140, maxD * 2.0);
+      buildSelectionBox();
+    });
+  });
+
+  // ---- white wireframe selection box (cube edges only, no faces) ----
+  function buildSelectionBox() {
+    if (selectionBox) return;
+    const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(9, 9, 9));
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    selectionBox = new THREE.LineSegments(geo, mat);
+    selectionBox.visible = false;
+    Graph.scene().add(selectionBox);
+  }
+
+  // ---- detail subnodes: a small constellation around the pinched node ----
+  // Each detail bullet becomes a dot + connector line + label, spread over a
+  // sphere (golden-angle distribution). Built lazily, faded by focusT.
+  function makeSubnodes(node) {
+    const group = new THREE.Group();
+    const details = node.details || [];
+    const accent = specialColor(node) || WHITE;
+    const flows = [];
+    const R = 15, n = details.length;
+    details.forEach((text, i) => {
+      const y = n === 1 ? 0 : 1 - (i / (n - 1)) * 2;        // -1 .. 1
+      const rad = Math.sqrt(Math.max(0, 1 - y * y));
+      const ang = i * 2.399963229728653;                   // golden angle
+      const pos = new THREE.Vector3(Math.cos(ang) * rad, y, Math.sin(ang) * rad).multiplyScalar(R);
+
+      const lgeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), pos]);
+      group.add(new THREE.Line(lgeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })));
+
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.3, 8, 8),
+        new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0 }));
+      dot.position.copy(pos);
+      group.add(dot);
+
+      const label = makeTextSprite(text, accent, 0.4, { family: FONT_DISPLAY, weight: 500, tracking: 0.5 });
+      label.position.copy(pos).y += 3.5;
+      group.add(label);
+
+      // orange dots that stream along this line, feeding into the parent
+      for (let k = 0; k < 2; k++) {
+        const fd = new THREE.Mesh(
+          new THREE.SphereGeometry(0.18, 6, 6),
+          new THREE.MeshBasicMaterial({ color: ORANGE, transparent: true, opacity: 0 }));
+        group.add(fd);
+        flows.push({ dot: fd, base: pos.clone(), phase: (i * 0.37 + k * 0.5) % 1 });
+      }
+    });
+    group.userData.flows = flows;
+    return group;
+  }
+
+  function disposeSubnodes() {
+    if (!subGroup) return;
+    Graph.scene().remove(subGroup);
+    subGroup.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+    });
+    subGroup = null; subForId = null;
+  }
+
+  // ---- details panel + selection ----
+  const panel = document.getElementById('panel');
+  function selectNode(node) {
+    if (!node || node.center) {
+      panel.classList.remove('open'); selectedId = null;
+      if (selectionBox) selectionBox.visible = false;
+      computeHot(null); refreshHighlight();
+      return;
+    }
+    selectedId = node.id;
+    document.getElementById('panel-title').textContent = node.label;
+    const tag = document.getElementById('panel-cluster');
+    const col = specialColor(node) || WHITE;
+    tag.textContent = 'cluster ' + node.cluster;
+    tag.style.background = col + '33';
+    tag.style.color = col;
+    const ul = document.getElementById('panel-details');
+    ul.innerHTML = '';
+    (node.details || []).forEach(d => {
+      const li = document.createElement('li'); li.textContent = d; ul.appendChild(li);
+    });
+    panel.classList.add('open');
+    buildSelectionBox();                             // ensure it exists even before engine settles
+    if (selectionBox) selectionBox.visible = true;   // box position is updated each frame in controlLoop
+    computeHot(node.id); refreshHighlight();         // light up its links + neighbours
+  }
+
+  // ---- hover tooltip (mouse + hand) ----
+  const tip = document.getElementById('tip');
+  let hoverNode = null;
+  function showHover(node) {
+    hoverNode = node && !node.center ? node : null;
+    if (!hoverNode) { tip.style.opacity = 0; return; }
+    tip.textContent = hoverNode.label;
+    tip.style.color = specialColor(hoverNode) || WHITE;
+    tip.style.opacity = 1;
+  }
+
+  // ======================================================================
+  //  Hand tracking  (MediaPipe Hands)
+  // ======================================================================
+  const camStatus = document.getElementById('cam-status');
+  const video = document.getElementById('cam');
+  let handVisible = false;       // is a hand currently in frame?
+
+  // ---- camera state in spherical coords (we drive the camera directly) ----
+  let theta = Math.PI / 2;   // azimuth
+  let phi = Math.PI / 2;     // polar (0 = top, PI = bottom)
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  // tuning
+  const PINCH_ON = 0.055, PINCH_OFF = 0.085;   // pinch hysteresis
+  const NAV_DEAD = 0.14;     // joystick dead-zone (fraction from screen centre)
+  const NAV_SPEED_X = 0.055; // rad / frame at full left-right deflection
+  const NAV_SPEED_Y = 0.035; // rad / frame at full up-down deflection
+  const AUTO_ORBIT = 0.0016;  // idle: slow self-rotation (rad / frame), no zoom
+  const LABEL_FRAC = 0.42;   // show titles for the nearest ~42% band of notes
+  const SELECT_DIST = 85;    // px: index fingertip within this of a node hovers it
+  const DWELL_MS = 130;      // linger this long over a node to auto-select it
+  const FOCUS_RADIUS = 42;   // camera distance when zoomed in on a pinched node (frames the subnodes)
+  const FOCUS_PICK = 170;    // px: pinch grabs the node within this of the fingertip
+  const FOCUS_LERP = 0.1;    // ease speed for zoom-in / zoom-out
+  const PINCH_ROT = 3.2;     // while pinched, hand travel -> radians of orbit
+  const FLOW_SPEED = 0.0007;  // orange dots streaming subnode -> parent (per ms)
+
+  // shared per-frame inputs coming from the hand
+  let navX = 0, navY = 0;        // joystick deflection (-1..1) while index is pointing
+  let handNav = false;           // is the index finger steering this frame?
+  let pinchLatch = false;        // last-frame pinch state
+  let pinchHold = false;         // is a pinch currently held?
+  let focusNode = null;          // node we're zooming in on while pinched
+  let focusT = 0;                // 0 = overview, 1 = fully zoomed on focusNode
+  let paNx = 0, paNy = 0, aTheta = 0, aPhi = 0;     // pinch-orbit anchors
+  let dwellNode = null, dwellSince = 0;             // hover-to-select bookkeeping
+  let curPx = 0, curPy = 0;      // index fingertip in screen px
+
+  // finger "extended" test, orientation-independent: tip is farther from the
+  // wrist than the finger's middle (pip) joint.
+  const wrist = lm => lm[0];
+  function extended(lm, tip, pip) {
+    const w = wrist(lm);
+    return Math.hypot(lm[tip].x - w.x, lm[tip].y - w.y) >
+           Math.hypot(lm[pip].x - w.x, lm[pip].y - w.y);
+  }
+
+  // the note (not the hub) whose screen position is nearest a pixel, within maxD
+  function nearestNode(px, py, maxD) {
+    if (!Graph) return null;
+    let best = null, bestD = maxD;
+    for (const n of Graph.graphData().nodes) {
+      if (n.center || n.x === undefined) continue;
+      const sc = Graph.graph2ScreenCoords(n.x, n.y, n.z);
+      const d = Math.hypot(sc.x - px, sc.y - py);
+      if (d < bestD) { bestD = d; best = n; }
+    }
+    return best;
+  }
+
+  function onResults(results) {
+    if (camStatus.textContent !== '● tracking') { camStatus.textContent = '● tracking'; camStatus.style.color = '#39d98a'; }
+    const hands = results.multiHandLandmarks || [];
+    if (hands.length === 0) { handVisible = false; handNav = false; pinchHold = false; pinchLatch = false; return; }
+    handVisible = true;
+
+    const lm = hands[0];
+    const nx = 1 - lm[8].x, ny = lm[8].y;   // index fingertip, mirrored x
+
+    // index fingertip drives navigation, hover and selection (no visible cursor)
+    curPx = nx * window.innerWidth;
+    curPy = ny * window.innerHeight;
+
+    // ---- pinch zooms in on a node; releasing zooms back out ----
+    const pd = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+    const pinch = pinchLatch ? pd < PINCH_OFF : pd < PINCH_ON;
+    pinchHold = pinch;
+
+    if (pinch && !pinchLatch) {
+      // grab the node nearest the fingertip (fall back to the selected one)
+      const node = nearestNode(curPx, curPy, FOCUS_PICK)
+        || (selectedId !== null && Graph.graphData().nodes.find(n => n.id === selectedId));
+      if (node) { focusNode = node; selectNode(node); }
+      paNx = nx; paNy = ny; aTheta = theta; aPhi = phi;   // anchor the orbit
+    }
+    if (pinch) {
+      // moving the hand while pinched orbits the view around the focused node
+      theta = aTheta - (nx - paNx) * PINCH_ROT;
+      phi = clamp(aPhi + (ny - paNy) * PINCH_ROT, 0.25, Math.PI - 0.25);
+    }
+    pinchLatch = pinch;
+
+    // ---- navigation: index finger pointing (index out, ring curled), not pinching ----
+    const pointing = extended(lm, 8, 6) && !extended(lm, 16, 14) && !pinch;
+    handNav = pointing;
+    if (pointing) {
+      const dx = (nx - 0.5) * 2, dy = (ny - 0.5) * 2;   // deflection from centre, with dead-zone
+      navX = Math.abs(dx) < NAV_DEAD ? 0 : dx;
+      navY = Math.abs(dy) < NAV_DEAD ? 0 : dy;
+    } else {
+      navX = navY = 0;
+    }
+  }
+
+  // ---- single control loop: navigation + auto-zoom + box/tooltip tracking ----
+  function controlLoop(now) {
+    if (Graph) {
+      // 0) ease the focus factor toward 1 while pinched, back to 0 when released
+      const focusTarget = (pinchHold && focusNode) ? 1 : 0;
+      focusT += (focusTarget - focusT) * FOCUS_LERP;
+      if (focusT < 0.001 && !pinchHold) { focusT = 0; focusNode = null; }
+
+      // 1) orbit direction. Index-point steers it; a held pinch sets it in
+      //    onResults; otherwise the scene slowly orbits on its own (no zoom).
+      if (handNav) {
+        theta -= navX * NAV_SPEED_X;                                  // point left/right -> rotate
+        phi = clamp(phi - navY * NAV_SPEED_Y, 0.25, Math.PI - 0.25);  // point up/down -> tilt
+      } else if (!pinchHold) {
+        theta += AUTO_ORBIT;                                          // gentle idle spin
+      }
+
+      // 2) camera at a constant distance; only the pinch-focus changes the
+      //    radius (and the look-at centre), easing in/out via focusT.
+      const r = baseRadius + (FOCUS_RADIUS - baseRadius) * focusT;
+      const fn = focusNode && focusNode.x !== undefined ? focusNode : { x: 0, y: 0, z: 0 };
+      const cx = fn.x * focusT, cy = fn.y * focusT, cz = fn.z * focusT;   // origin -> node
+      Graph.cameraPosition({
+        x: cx + r * Math.sin(phi) * Math.cos(theta),
+        y: cy + r * Math.cos(phi),
+        z: cz + r * Math.sin(phi) * Math.sin(theta),
+      }, { x: cx, y: cy, z: cz }, 0);
+
+      // 3) keep the selection box on the selected node
+      if (selectionBox && selectedId !== null) {
+        const n = Graph.graphData().nodes.find(x => x.id === selectedId);
+        if (n && n.x !== undefined) selectionBox.position.set(n.x, n.y, n.z);
+      }
+
+      // 3a) detail subnodes around the pinched node, faded in by focusT
+      if (focusNode && focusT > 0.01) {
+        if (subForId !== focusNode.id) {
+          disposeSubnodes();
+          subGroup = makeSubnodes(focusNode);
+          Graph.scene().add(subGroup);
+          subForId = focusNode.id;
+        }
+        subGroup.visible = true;
+        subGroup.position.set(focusNode.x, focusNode.y, focusNode.z);
+        subGroup.traverse(o => {
+          if (!o.material) return;
+          o.material.opacity = (o.isLine ? 0.4 : 1) * focusT;   // lines dimmer
+        });
+        // animate the orange flow dots: subnode (t=0) -> parent centre (t=1)
+        for (const f of subGroup.userData.flows) {
+          const t = ((now * FLOW_SPEED) + f.phase) % 1;
+          f.dot.position.copy(f.base).multiplyScalar(1 - t);
+          f.dot.material.opacity = focusT * Math.sin(t * Math.PI);   // pulse along the line
+        }
+      } else if (subGroup) {
+        subGroup.visible = false;
+        if (focusT < 0.001) disposeSubnodes();
+      }
+
+      // 3b) proximity labels: only show titles for the notes nearest the camera
+      const cam = Graph.cameraPosition();
+      const notes = Graph.graphData().nodes;
+      let minD = Infinity, maxD = -Infinity;
+      for (const n of notes) {
+        if (n.center || n.x === undefined) continue;
+        n.__d = Math.hypot(cam.x - n.x, cam.y - n.y, cam.z - n.z);
+        if (n.__d < minD) minD = n.__d;
+        if (n.__d > maxD) maxD = n.__d;
+      }
+      const thr = minD + (maxD - minD) * LABEL_FRAC;
+      for (const n of notes) {
+        if (!n.__label || n.center) continue;
+        n.__label.visible = n.__d !== undefined && n.__d <= thr;
+      }
+
+      // 4) hand: hover the node nearest the fingertip, and auto-select it
+      //    once the finger lingers there (fluid hover-select, no pinch needed).
+      if (handVisible && !pinchHold) {
+        const best = nearestNode(curPx, curPy, SELECT_DIST);
+        if (best !== hoverNode) showHover(best);
+        // dwell: same node under the finger for DWELL_MS -> select it
+        if (best && best !== dwellNode) { dwellNode = best; dwellSince = now; }
+        else if (!best) dwellNode = null;
+        if (dwellNode && dwellNode.id !== selectedId && now - dwellSince >= DWELL_MS) {
+          selectNode(dwellNode);
+        }
+      }
+
+      // 5) position the tooltip over whichever node is hovered
+      if (hoverNode && hoverNode.x !== undefined) {
+        const sc = Graph.graph2ScreenCoords(hoverNode.x, hoverNode.y, hoverNode.z);
+        tip.style.left = sc.x + 'px';
+        tip.style.top = sc.y + 'px';
+      }
+
+      // 6) ease each node's glow: selection brightens it + its neighbours,
+      //    dims the rest; with no selection everything settles to its base.
+      const pulse = 0.85 + 0.15 * Math.sin(now * 0.002);   // subtle breathing glow
+      for (const n of notes) {
+        if (!n.__glow) continue;
+        const base = n.__glowBase;
+        let target = base * pulse;
+        if (selectedId !== null) {
+          target = (n.id === selectedId) ? base * 1.9
+                 : hotSet.has(n.id) ? base * 1.15 : base * 0.18;
+        }
+        const m = n.__glow.material;
+        m.opacity += (target - m.opacity) * 0.12;
+      }
+
+      // 7) drift the starfield for gentle parallax
+      if (starfield) { starfield.rotation.y += 0.00012; starfield.rotation.x += 0.00005; }
+    }
+    requestAnimationFrame(controlLoop);
+  }
+  requestAnimationFrame(controlLoop);
+
+  // ---- start MediaPipe only when the user opts in (needs camera permission) ----
+  document.getElementById('enable-cam').addEventListener('click', startHandTracking);
+
+  async function startHandTracking() {
+    const enableBtn = document.getElementById('enable-cam');
+    enableBtn.style.display = 'none';
+
+    // 1) get the camera ourselves so we surface the *real* error
+    camStatus.textContent = 'requesting camera…';
+    let stream;
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia unavailable (needs https or localhost)');
+      }
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: 'user' },
+        audio: false,
+      });
+    } catch (err) {
+      // err.name tells the truth: NotAllowedError, NotReadableError, NotFoundError…
+      const map = {
+        NotAllowedError: 'permission denied',
+        NotReadableError: 'camera in use by another app',
+        NotFoundError: 'no camera found',
+        OverconstrainedError: 'camera constraints unmet',
+        SecurityError: 'blocked (insecure origin)',
+      };
+      camStatus.textContent = map[err.name] || ('camera error: ' + err.name);
+      camStatus.style.color = '#ff5d5d';
+      enableBtn.style.display = 'block';
+      console.error('getUserMedia failed:', err);
+      return;
+    }
+
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    camStatus.textContent = 'loading model…';
+
+    // 2) set up MediaPipe Hands
+    let hands;
+    try {
+      hands = new Hands({
+        locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`,
+      });
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.6,
+        minTrackingConfidence: 0.6,
+      });
+      hands.onResults(results => {
+        onResults(results);
+      });
+    } catch (err) {
+      camStatus.textContent = 'model load failed';
+      camStatus.style.color = '#ff5d5d';
+      console.error('Hands init failed:', err);
+      return;
+    }
+
+    // 3) pump frames ourselves (replaces @mediapipe/camera_utils)
+    async function pump() {
+      if (video.readyState >= 2) {
+        try { await hands.send({ image: video }); }
+        catch (err) { console.error('hands.send failed:', err); }
+      }
+      requestAnimationFrame(pump);
+    }
+    requestAnimationFrame(pump);
+  }
+
+  window.addEventListener('resize', () => {
+    if (Graph) { Graph.width(window.innerWidth); Graph.height(window.innerHeight); }
+  });
+  </script>
+</body>
+</html>

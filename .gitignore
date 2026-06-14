@@ -1,0 +1,22 @@
+# Python virtual environment (recreate with: python3 -m venv venv && pip install -r requirements.txt)
+venv/
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Generated pipeline intermediates (rebuilt by run_pipeline.py).
+# nodes.json + edges.json are kept so the viewer runs without re-embedding.
+data/notes.json
+data/notes_embedded.json
+data/embeddings.npy
